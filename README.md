@@ -1,9 +1,6 @@
-# Required packages:
-* jsdom
-* node-fetch
-* discord.js
-
 # Setup
+
+Clone the repo and run `npm install`
 
 Create a config.json with the following fields
 ```
@@ -22,6 +19,8 @@ Create a config.json with the following fields
     ]
 }
 ```
+
+To start the bot: `npm start`
 
 # Usage 
 
