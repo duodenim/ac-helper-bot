@@ -1,0 +1,10 @@
+# Ignore nodejs stuff
+node_modules/
+package-lock.json
+
+# Config files
+config.json
+
+# Caching
+*.png
+*.jpg
