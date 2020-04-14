@@ -20,37 +20,42 @@ async function searchPattern(query) {
     const dom = new JSDOM(html);
 
     //Todo - Find a better way to select these. There's no API, just server-side rendered HTML
-    const patterns = dom.window.document.querySelectorAll('div.is-one-third-desktop');
+    const imgs = dom.window.document.querySelectorAll('img');
+    const patterns = Array.from(imgs).filter((pattern) => {
+        return pattern.getAttribute('src').includes('designs');
+    });
+
+
+    let img_urls = patterns.map((pattern) => {
+        const src = pattern.getAttribute('src');
+        return (base_url + src);
+    });
     if (cache_imgs) {
-        let promises = Array.from(patterns).map((pattern) => {
-            const children = pattern.children;
-            const imgHTML = children[2];
-            const src = imgHTML.getAttribute('href');
-            const local_path = src.split('/')[3];
+        let promises = img_urls.map((url) => {
+            const local_path = url.split('/').pop();
             const file = fs.createWriteStream(local_path);
-            return fetch(base_url + src).then((file_res) => { 
+            return fetch(url).then((file_res) => { 
                 file_res.body.pipe(file);
             });
         });
         await Promise.all(promises);
     }
-    let img_urls = Array.from(patterns).map((pattern) => {
-        const children = pattern.children;
-        const imgHTML = children[2];
-        const src = imgHTML.getAttribute('href');
-        return (base_url + src);
-    });
+    
     
     return img_urls;
 }
 
-function isAllowedChannel(server_id, channel_id) {
-    let channel = server_settings.find((server) => {
-        let channel_match = ( server.allowed_channel == channel_id );
-        let server_match = ( server.id == server_id );
-        return (channel_match && server_match);
-    });
-    return (channel != undefined)
+function isAllowed(msg) {
+    if (msg.guild == undefined) {
+        return true;
+    } else {
+        let channel = server_settings.find((server) => {
+            let channel_match = ( server.allowed_channel == msg.channel.id );
+            let server_match = ( server.id == msg.guild.id );
+            return (channel_match && server_match);
+        });
+        return (channel != undefined)
+    }
 }
 
 function checkConfig() {
@@ -78,7 +83,7 @@ client.on('ready', () => {
 });
 
 client.on('message', (msg) => {
-    if (isAllowedChannel(msg.guild.id, msg.channel.id) && msg.content.startsWith(`${prefix}search`)) {
+    if (isAllowed(msg) && msg.content.startsWith(`${prefix}search`)) {
         let search_words = msg.content.split(' ');
         if (search_words.length > 1) {
             search_words.shift();
