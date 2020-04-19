@@ -1,0 +1,11 @@
+[package]
+name = "ac-helper-bot"
+version = "0.1.0"
+authors = ["duodenim"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serenity = "0.8.4"
+json = "0.12.4"

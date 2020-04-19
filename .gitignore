@@ -11,3 +11,8 @@ config.json
 
 # Database Files
 *.db
+
+
+#Added by cargo
+
+/target
