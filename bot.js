@@ -3,10 +3,8 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const Discord = require('discord.js');
 const config = require('./config.json');
-const sqlite3 = require('sqlite3');
-const sqlite = require('sqlite');
-const {JSDOM} = jsdom;
-const { open } = sqlite;
+const DB = require('./db');
+const { JSDOM } = jsdom;
 const client = new Discord.Client();
 
 const base_url = 'https://nooksisland.com';
@@ -31,7 +29,6 @@ async function searchPattern(query) {
         return pattern.getAttribute('src').includes('designs');
     });
 
-
     let img_urls = patterns.map((pattern) => {
         const src = pattern.getAttribute('src');
         return (base_url + src);
@@ -46,7 +43,6 @@ async function searchPattern(query) {
         });
         await Promise.all(promises);
     }
-    
     
     return img_urls;
 }
@@ -84,11 +80,6 @@ function checkConfig() {
     return !failed;
 }
 
-async function initDB(db) {
-    await db.exec('CREATE TABLE users (user_id TINYTEXT, player_name TINYTEXT, island_name TINYTEXT, code TINYTEXT)');
-    const result = await db.get('SELECT * FROM users');
-}
-
 async function newUserPrompts(message) {
     const user = message.author;
     const user_id = message.author.id.toString();
@@ -98,30 +89,20 @@ async function newUserPrompts(message) {
         return;
     }
 
-    const curr_user_data = await database.get('SELECT * FROM users WHERE user_id = (:id)', {
-        ':id': user_id
-    });
+    const curr_user_data = await DB.get_user(database, user_id);
+    console.log(curr_user_data);
     if (curr_user_data == undefined) {
-        await database.run('INSERT INTO users(user_id) VALUES (:id)', {
-            ':id': user_id
-        });
+        await DB.new_user(database, user_id);
         commands_in_progress.set(user.id, 'newuser');
         user.send('What is your character\'s name?');
     } else if (curr_user_data.player_name == null) {
         const name = message.content;
         console.log(name);
-        await database.run('UPDATE users SET player_name = (:name) WHERE user_id = (:id)', {
-            ':name': name,
-            ':id': user_id
-        });
+        DB.set_player_name(database, user_id, name);
         user.send('What is your island name?');
     } else if (curr_user_data.island_name == null) {
         const name = message.content;
-        console.log(name);
-        await database.run('UPDATE users SET island_name = (:name) WHERE user_id = (:id)', {
-            ':name': name,
-            ':id': user_id
-        });
+        await DB.set_island_name(database, user_id, name);
         user.send(`Great, ${curr_user_data.player_name}! You\'re all set up! Use ${prefix}open DODO_CODE to open your island`);
         commands_in_progress.delete(user.id);
     } else {
@@ -162,16 +143,13 @@ client.on('message', (msg) => {
                 if ( params.length == 1 ) {
                     const code = params[0];
                     const user_id = msg.author.id.toString();
-                    database.get('SELECT * FROM users WHERE user_id = ?', user_id).then((user_data) => {
+                    DB.get_user(database, user_id).then((user_data) => {
                         if (user_data == undefined) {
                             msg.author.send(`Please set up your island with ${prefix}newuser first!`);
                         } else {
                             console.log(user_data);
                             msg.channel.send(`${user_data.player_name}\'s Island (${user_data.island_name}) is open at ${code}`);
-                            database.run('UPDATE users SET code = (:code) WHERE user_id = (:id)', {
-                                ':code': code,
-                                ':id': user_data.user_id
-                            });
+                            DB.post_code(database, user_data.user_id, code);
                         }
                     });
                     
@@ -182,20 +160,20 @@ client.on('message', (msg) => {
             }
             case 'close': {
                 const user_id = msg.author.id.toString();
-                database.get('SELECT * FROM users WHERE user_id = ?', user_id).then((user_data) =>{
+                DB.get_user(database, user_id).then((user_data) =>{
                     if (user_data == undefined) {
                         msg.author.send(`Please set up your island with ${prefix}newuser first!`);
                     } else {
                         if (user_data.code) {
                             msg.channel.send(`Closed ${user_data.player_name}\'s Island`);
-                            database.run("UPDATE users SET code = '' WHERE user_id = ?", user_id);
+                            DB.close_island(database, user_id);
                         }
                     }
                 });
                 break;
             }
             case 'islands': {
-                database.all("SELECT * FROM users WHERE (code IS NOT NULL AND code != '')").then((users) => {
+                DB.get_open_islands(database).then((users) => {
                     console.log(users);
                     if (users.length > 0) {
                         let txt = 'The following islands are open:\n';
@@ -214,16 +192,8 @@ client.on('message', (msg) => {
 });
 
 if (checkConfig()) {
-    open({ 
-        filename: 'database.db',
-        //filename: ':memory:',
-        driver: sqlite3.Database
-    }).then((db) => {
-        console.log(db);
-        initDB(db).then(() => {
-            console.log('database initialized');
+    DB.init_database("database.db").then((db) => {
             database = db;
-        });
     });
     client.login(token);
 } else {
