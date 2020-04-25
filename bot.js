@@ -16,9 +16,8 @@ const server_settings = config.server_settings;
 const cache_imgs = true;
 
 let database = undefined;
-let commands_in_progress = new Map();
 
-async function searchPattern(query) {
+async function search_pattern(query) {
     const response = await fetch(design_url + query);
     const html = await response.text();
     const dom = new JSDOM(html);
@@ -47,7 +46,7 @@ async function searchPattern(query) {
     return img_urls;
 }
 
-function isAllowed(msg) {
+function is_allowed(msg) {
     if (msg.guild == undefined) {
         return true;
     } else {
@@ -60,7 +59,11 @@ function isAllowed(msg) {
     }
 }
 
-function checkConfig() {
+function is_command(msg) {
+    return msg.content.startsWith(`${prefix}`);
+}
+
+function check_config() {
     let failed = false;
     if (token == undefined) {
         console.error("Missing token field inside config.json! Set this to the Discord bot token");
@@ -80,7 +83,7 @@ function checkConfig() {
     return !failed;
 }
 
-async function newUserPrompts(message) {
+async function new_user_prompts(message) {
     const user = message.author;
     const user_id = message.author.id.toString();
 
@@ -91,23 +94,22 @@ async function newUserPrompts(message) {
 
     const curr_user_data = await DB.get_user(database, user_id);
     console.log(curr_user_data);
-    if (curr_user_data == undefined) {
-        await DB.new_user(database, user_id);
-        commands_in_progress.set(user.id, 'newuser');
-        user.send('What is your character\'s name?');
-    } else if (curr_user_data.player_name == null) {
-        const name = message.content;
-        console.log(name);
-        DB.set_player_name(database, user_id, name);
-        user.send('What is your island name?');
-    } else if (curr_user_data.island_name == null) {
-        const name = message.content;
-        await DB.set_island_name(database, user_id, name);
-        user.send(`Great, ${curr_user_data.player_name}! You\'re all set up! Use ${prefix}open DODO_CODE to open your island`);
-        commands_in_progress.delete(user.id);
-    } else {
+    if (curr_user_data != undefined) {
         user.send("You're already set up!");
-    }
+        return;
+    } 
+    
+    await DB.new_user(database, user_id);
+    const filter = (m) => {
+        return m.author.id == user.id;
+    };
+    let channel = (await user.send('What is your character\'s name?')).channel;
+    let player_name = (await channel.awaitMessages(filter, { max: 1 })).first().content;
+    await DB.set_player_name(database, user_id, player_name);
+    await user.send('What is your island name?');
+    let island_name = (await channel.awaitMessages(filter, { max: 1 })).first().content;
+    await DB.set_island_name(database, user_id, island_name);
+    user.send(`Great, ${player_name}! You\'re all set up! Use ${prefix}open DODO_CODE to open your island`);
 }
 
 client.on('ready', () => {
@@ -115,15 +117,15 @@ client.on('ready', () => {
 });
 
 client.on('message', (msg) => {
-    if (isAllowed(msg)) {
-        const command = (msg.content.startsWith(`${prefix}`)) ? msg.content.split(' ')[0].replace(`${prefix}`, '') : commands_in_progress.get(msg.author.id);
+    if (is_allowed(msg) && is_command(msg)) {
+        const command = msg.content.split(' ')[0].replace(`${prefix}`, '');
         let params = msg.content.split(' ');
         params.shift();
         switch(command) {
             case 'search': {
                 if (params.length > 0) {
                     let search_txt = params.join('+');
-                    searchPattern(search_txt).then( (urls) => {
+                    search_pattern(search_txt).then( (urls) => {
                         if (urls.length > 0) {
                             msg.channel.send({files: urls}).catch(console.error);
                         } else {
@@ -136,7 +138,7 @@ client.on('message', (msg) => {
                 break;
             }
             case 'newuser': {
-                newUserPrompts(msg);
+                new_user_prompts(msg);
                 break;
             }
             case 'open': {
@@ -191,7 +193,7 @@ client.on('message', (msg) => {
     }
 });
 
-if (checkConfig()) {
+if (check_config()) {
     DB.init_database("database.db").then((db) => {
             database = db;
     });
