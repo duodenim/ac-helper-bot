@@ -8,3 +8,6 @@ config.json
 # Caching
 *.png
 *.jpg
+
+# Database Files
+*.db
