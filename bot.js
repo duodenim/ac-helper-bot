@@ -141,6 +141,41 @@ client.on('message', (msg) => {
                 new_user_prompts(msg);
                 break;
             }
+            case 'setname': {
+                if (params.length == 1) {
+                    const name = params[0];
+                    const user_id = msg.author.id.toString();
+                    DB.get_user(database, user_id).then((user_data) => {
+                        if (user_data == undefined) {
+                            msg.author.send(`Please set up your island with ${prefix}newuser first!`);
+                        } else {
+                            DB.set_player_name(database, user_id, name);
+                            msg.channel.send(`Set ${msg.author.username}\'s villager to ${name}`);
+                        }
+                    });
+                } else {
+                    msg.channel.send(`Usage: ${prefex}setname name`);
+                }
+                break;
+            }
+            case 'setisland': {
+                if (params.length == 1) {
+                    const name = params[0];
+                    const user_id = msg.author.id.toString();
+                    DB.get_user(database, user_id).then((user_data) => {
+                        if (user_data == undefined) {
+                            msg.author.send(`Please set up your island with ${prefix}newuser first!`);
+                        } else {
+                            DB.set_island_name(database, user_id, name);
+                            msg.channel.send(`Set ${user_data.player_name}\'s island to ${name}`);
+                        }
+                    });
+                } else {
+                    msg.channel.send(`Usage: ${prefex}setisland island_name`);
+                }
+                break;
+            }
+            case 'post':
             case 'open': {
                 if ( params.length == 1 ) {
                     const code = params[0];
@@ -196,8 +231,8 @@ client.on('message', (msg) => {
 if (check_config()) {
     DB.init_database("database.db").then((db) => {
             database = db;
+            client.login(token);
     });
-    client.login(token);
 } else {
     process.exit(0);
 }
